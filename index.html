@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Barkod İlçe Okuyucu</title>
+<meta name="theme-color" content="#07090d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Barkod">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Koyu tek tema: cam katmanlar, ilçe rengiyle dolan tek büyük sonuç kartı. */
+:root{
+  --bg:#07090d; --ink:#f2f5f9; --ink-dim:#93a0b4;
+  --line:rgba(255,255,255,.10); --glass:rgba(255,255,255,.055); --glass-2:rgba(255,255,255,.10);
+  --accent:#4f9dff; --bad:#ff5a52; --good:#45d06a; --wa:#25d366;
+  --font-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --font-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:
+    radial-gradient(120% 70% at 12% -10%, rgba(79,157,255,.16), transparent 60%),
+    radial-gradient(110% 60% at 95% 8%, rgba(0,194,224,.12), transparent 62%), var(--bg);
+  color:var(--ink);font-family:var(--font-body);-webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
+.app{min-height:100%;display:flex;flex-direction:column;max-width:720px;margin:0 auto;
+  padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 86px)}
+header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.brand{font-family:var(--font-display);font-weight:800;letter-spacing:-.02em;font-size:19px;line-height:1}
+.brand small{display:block;font-family:var(--font-body);font-weight:400;font-size:11.5px;color:var(--ink-dim);margin-top:3px}
+.pill{margin-left:auto;display:flex;align-items:center;gap:7px;padding:7px 11px;border-radius:999px;
+  background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(14px) saturate(1.4);
+  -webkit-backdrop-filter:blur(14px) saturate(1.4);font-size:11.5px;color:var(--ink-dim);white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 9px var(--good)}
+.card{background:var(--glass);border:1px solid var(--line);border-radius:22px;
+  backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);
+  box-shadow:0 18px 40px -28px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.07)}
+.pad{padding:16px}
+.view{display:none;flex-direction:column;gap:14px}
+.view.on{display:flex}
+
+#result{position:relative;overflow:hidden;min-height:168px;display:flex;flex-direction:column;justify-content:center;
+  padding:20px;border-radius:26px;transition:border-color .35s ease}
+#result::before{content:"";position:absolute;inset:0;
+  background:radial-gradient(120% 120% at 20% 0%, var(--rc,transparent) 0%, transparent 70%);opacity:.34;transition:opacity .4s}
+#result .inner{position:relative}
+.r-label{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
+.r-ilce{font-family:var(--font-display);font-weight:800;letter-spacing:-.035em;line-height:.92;
+  font-size:clamp(42px,15vw,84px);margin:8px 0 10px;text-wrap:balance;color:var(--rc,var(--ink));
+  text-shadow:0 0 44px color-mix(in srgb, var(--rc,transparent) 55%, transparent)}
+.r-firma{font-weight:600;font-size:16px;line-height:1.3}
+.r-meta{margin-top:10px;display:flex;flex-wrap:wrap;gap:7px}
+.chip{font-size:12px;padding:5px 10px;border-radius:999px;background:var(--glass-2);border:1px solid var(--line);font-variant-numeric:tabular-nums}
+.chip.warn{background:rgba(255,176,32,.16);border-color:rgba(255,176,32,.4);color:#ffd48a}
+.r-idle{color:var(--ink-dim);font-size:14.5px;line-height:1.5}
+.pop{animation:pop .42s cubic-bezier(.2,1.3,.35,1)}
+@keyframes pop{from{transform:scale(.955) translateY(7px);opacity:.25}to{transform:none;opacity:1}}
+.wa{display:none;margin-top:14px;align-items:center;justify-content:center;gap:9px;width:100%;
+  background:linear-gradient(180deg,#2ce06f,#1fb757);color:#04210f;border:0;border-radius:16px;
+  font-family:var(--font-body);font-weight:700;font-size:15.5px;padding:15px 16px;cursor:pointer;
+  box-shadow:0 14px 28px -16px rgba(37,211,102,.85);transition:transform .14s cubic-bezier(.2,1.2,.3,1)}
+.wa.on{display:flex}
+.wa:active{transform:scale(.976)}
+.wa small{font-weight:500;opacity:.72}
+
+.cam{position:relative;border-radius:22px;overflow:hidden;background:#05070a;border:1px solid var(--line);aspect-ratio:3/4;display:none}
+.cam.on{display:block}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.reticle{position:absolute;inset:26% 7%;border-radius:16px;box-shadow:0 0 0 2px rgba(255,255,255,.5),0 0 0 9999px rgba(0,0,0,.3);pointer-events:none}
+.laser{position:absolute;left:7%;right:7%;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  box-shadow:0 0 14px var(--accent);animation:sweep 2.1s ease-in-out infinite;pointer-events:none}
+@keyframes sweep{0%,100%{top:29%}50%{top:71%}}
+.camtools{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:8px;align-items:center}
+.ctool{appearance:none;border:1px solid rgba(255,255,255,.22);background:rgba(10,14,20,.6);color:#eaf0f8;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:12px;padding:9px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+.ctool[aria-pressed="true"]{background:#fff;color:#07090d}
+.camtools input[type=range]{flex:1;accent-color:var(--accent)}
+
+.btns{display:grid;gap:10px}
+.btn{appearance:none;border:1px solid var(--line);background:var(--glass-2);color:var(--ink);
+  font-family:var(--font-body);font-size:15.5px;font-weight:600;padding:16px 18px;border-radius:18px;
+  display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  transition:transform .14s cubic-bezier(.2,1.2,.3,1),background .2s}
+.btn:active{transform:scale(.975)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.btn.primary{background:linear-gradient(180deg,rgba(79,157,255,.95),rgba(44,116,214,.95));border-color:rgba(255,255,255,.22);
+  box-shadow:0 14px 30px -16px rgba(79,157,255,.8)}
+.btn.sm{font-size:13.5px;padding:11px 14px;border-radius:14px;font-weight:500}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.row{display:flex;gap:9px;flex-wrap:wrap}
+.row>*{flex:1 1 auto}
+input,textarea{width:100%;font-family:var(--font-body);font-size:15px;color:var(--ink);
+  background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:14px;padding:13px 14px}
+input{font-variant-numeric:tabular-nums}
+input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+label.lb{display:block;font-size:12px;color:var(--ink-dim);margin:0 0 6px 2px}
+.hint{font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+.sep{height:1px;background:var(--line);margin:13px 0}
+h2{font-family:var(--font-display);font-weight:600;font-size:14px;margin:0 0 10px}
+
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar{display:grid;grid-template-columns:96px 1fr 34px auto;align-items:center;gap:9px;font-size:13px}
+.bar .t{color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .track{height:8px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
+.bar .fill{height:100%;border-radius:99px}
+.bar .n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.mini{appearance:none;border:1px solid rgba(37,211,102,.45);background:rgba(37,211,102,.14);color:#8ff0b6;
+  border-radius:10px;padding:6px 9px;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.hist{display:flex;flex-direction:column;gap:7px;max-height:46vh;overflow-y:auto}
+.hrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.hrow .tag{font-family:var(--font-display);font-weight:600;font-size:12.5px;padding:4px 9px;border-radius:8px;white-space:nowrap}
+.hrow .no{font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink-dim)}
+.hrow .fr{margin-left:auto;font-size:11.5px;color:var(--ink-dim);text-align:right;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{color:var(--ink-dim);font-size:13.5px}
+.tel{display:grid;grid-template-columns:104px 1fr;gap:8px;align-items:center;margin-bottom:8px}
+.tel span{font-size:12.5px;color:var(--ink-dim)}
+.tel input{padding:10px 12px;font-size:14px}
+
+nav{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:8px 14px calc(env(safe-area-inset-bottom) + 8px);display:flex;justify-content:center;pointer-events:none}
+nav .wrap{pointer-events:auto;display:flex;gap:4px;padding:5px;border-radius:999px;background:rgba(14,18,25,.72);
+  border:1px solid var(--line);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);
+  box-shadow:0 20px 44px -22px rgba(0,0,0,.95)}
+nav button{appearance:none;border:0;background:transparent;color:var(--ink-dim);font-family:var(--font-body);
+  font-size:13.5px;font-weight:600;padding:11px 20px;border-radius:999px;cursor:pointer;transition:color .2s,background .25s}
+nav button[aria-current="true"]{color:#07090d;background:var(--ink)}
+.toast{position:fixed;left:50%;transform:translateX(-50%) translateY(14px);bottom:calc(env(safe-area-inset-bottom) + 96px);
+  z-index:40;padding:11px 16px;border-radius:14px;background:rgba(14,18,25,.94);border:1px solid var(--line);
+  font-size:13.5px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;max-width:86vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+code.snip{display:block;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Menlo,monospace;
+  font-size:10.5px;line-height:1.45;color:#b9c6d8;background:rgba(0,0,0,.34);border:1px solid var(--line);
+  border-radius:12px;padding:11px;max-height:132px;overflow:auto}
+#lock{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:22px;
+  background:radial-gradient(120% 70% at 20% 0%, rgba(79,157,255,.18), transparent 60%), #07090d}
+#lock .box{width:100%;max-width:360px;text-align:center}
+#lock h1{font-family:var(--font-display);font-weight:800;font-size:25px;letter-spacing:-.02em;margin:0 0 6px}
+#lock p{color:var(--ink-dim);font-size:13.5px;line-height:1.55;margin:0 0 18px}
+#lockErr{color:#ffb4b0;font-size:13px;min-height:19px;margin-top:10px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="lock"><div class="box">
+  <h1>Barkod → İlçe</h1>
+  <p>Bu cihazda bir kez parola gir; sipariş listesi açılır ve bir daha sorulmaz.</p>
+  <input id="pw" type="password" inputmode="text" autocomplete="current-password" placeholder="parola" style="text-align:center;letter-spacing:.08em">
+  <button class="btn primary" id="btnUnlock" style="margin-top:10px">Kilidi aç</button>
+  <div id="lockErr"></div>
+</div></div>
+
+<div class="app" id="app" hidden>
+  <header>
+    <div class="brand">Barkod → İlçe<small>Çamlıca Hub sipariş barkodu okuyucu</small></div>
+    <div class="pill"><span class="dot" id="dataDot"></span><span id="dataPill">—</span></div>
+  </header>
+
+  <section class="view on" id="v-scan">
+    <div class="card" id="result" aria-live="polite">
+      <div class="inner" id="resultInner">
+        <div class="r-label">Hazır</div>
+        <div class="r-ilce" style="font-size:clamp(30px,9vw,46px)">Barkodu okut</div>
+        <div class="r-idle">Taramayı başlat, barkodu çerçeveye tut. İlçe adı sesli okunur, altında WhatsApp düğmesi çıkar.</div>
+      </div>
+      <button class="wa" id="btnWa"></button>
+    </div>
+
+    <div class="cam" id="cam">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="reticle"></div><div class="laser"></div>
+      <div class="camtools">
+        <button class="ctool" id="btnTorch" aria-pressed="false" hidden>Işık</button>
+        <input type="range" id="zoom" min="1" max="4" step="0.1" value="1" hidden aria-label="Yakınlaştır">
+      </div>
+    </div>
+
+    <div class="btns">
+      <button class="btn primary" id="btnLive">Taramayı başlat</button>
+      <div class="row">
+        <button class="btn sm" id="btnPhoto">Fotoğrafla oku</button>
+        <button class="btn sm" id="btnSound" aria-pressed="true">Ses: açık</button>
+      </div>
+    </div>
+    <input type="file" id="file" accept="image/*" capture="environment" hidden>
+
+    <div class="card pad">
+      <label class="lb" for="manual">Barkod okunmazsa: sipariş no ya da kurum adı</label>
+      <div class="row">
+        <input id="manual" placeholder="271300013 veya KISIKLI" style="flex:3 1 180px">
+        <button class="btn sm" id="btnFind" style="flex:1 1 90px">Bul</button>
+      </div>
+      <div class="hint" id="findHint" style="margin-top:9px">Son 4 hane de yeter.</div>
+    </div>
+  </section>
+
+  <section class="view" id="v-hist">
+    <div class="card pad">
+      <h2>Okunanlar ve ilçe sayıları</h2>
+      <div class="bars" id="bars"><div class="empty">Henüz okuma yok.</div></div>
+      <div class="hint" style="margin-top:11px">Yeşil düğme o ilçenin bütün okunan siparişlerini tek WhatsApp mesajında toplar.</div>
+    </div>
+    <div class="card pad">
+      <h2>Son okumalar</h2>
+      <div class="hist" id="hist"><div class="empty">Henüz okuma yok.</div></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn sm" id="btnCopyHist">Listeyi kopyala</button>
+        <button class="btn sm" id="btnClearHist">Geçmişi sil</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="v-data">
+    <div class="card pad">
+      <h2>İlçe telefonları</h2>
+      <div class="hint" style="margin-bottom:11px">WhatsApp mesajı hangi ilçeyse o numaraya açılır. Numarayı değiştirirsen bu cihazda kayıtlı kalır.</div>
+      <div id="tels"></div>
+      <div class="row" style="margin-top:4px">
+        <button class="btn sm" id="btnSaveTel">Numaraları kaydet</button>
+        <button class="btn sm" id="btnResetTel">Varsayılanlara dön</button>
+      </div>
+    </div>
+    <div class="card pad">
+      <h2>Sipariş verisi</h2>
+      <div class="hint" id="dataInfo">—</div>
+      <div class="sep"></div>
+      <label class="lb" for="paste">Panelden aldığın listeyi buraya yapıştır</label>
+      <textarea id="paste" rows="4" placeholder="271300013|6|4|500|1|PENDİK KAYNARCA ..."></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm" id="btnImport">Yükle ve kaydet</button>
+        <button class="btn sm" id="btnReset">Sunucudaki veriye dön</button>
+      </div>
+    </div>
+    <div class="card pad">
+      <h2>Panelden güncel veriyi çekme</h2>
+      <div class="hint">Bilgisayarda <b>Tüm Siparişler</b> sayfasını aç, F12 → Console, kodu yapıştır, Enter. Bütün sayfaları gezer, listeyi panoya kopyalar; yukarıya yapıştır.</div>
+      <code class="snip" id="snip"></code>
+      <button class="btn sm" id="btnCopySnip" style="margin-top:10px">Kodu kopyala</button>
+    </div>
+  </section>
+</div>
+
+<nav hidden id="nav"><div class="wrap">
+  <button data-v="scan" aria-current="true">Tara</button>
+  <button data-v="hist">Geçmiş</button>
+  <button data-v="data">Veri</button>
+</div></nav>
+<div class="toast" id="toast"></div>
+
+<script src="zxing.min.js"></script>
+<script>
+(function(){
+"use strict";
+const ILCE=["ÜMRANİYE","ÜSKÜDAR","TUZLA","ŞİLE","MALTEPE","SANCAKTEPE","PENDİK","DUDULLU","SULTANBEYLİ","BEYKOZ"];
+const TUR=["Klasik Karton","Özel Karton","Küçük Boy Ciltli Takvim","Büyük Boy Ciltli Takvim","Mobil Afiş","Mobil Kart","Mobil Link"];
+const COLOR={"ÜMRANİYE":"#4f9dff","ÜSKÜDAR":"#19c7a0","TUZLA":"#ffb020","ŞİLE":"#8b7cff","MALTEPE":"#ff6fa3",
+ "SANCAKTEPE":"#45d06a","PENDİK":"#ff7a45","DUDULLU":"#00c2e0","SULTANBEYLİ":"#d7a94b","BEYKOZ":"#e24a4a"};
+const TEL0={"MALTEPE":"05556030535","ŞİLE":"05524150067","DUDULLU":"05532990954","TUZLA":"05425106289",
+ "BEYKOZ":"05406653434","ÜSKÜDAR":"05558282030","SULTANBEYLİ":"05383480729","PENDİK":"05062015933",
+ "SANCAKTEPE":"05379188650","ÜMRANİYE":"05523675784"};
+const LS_KEY="ck_bar_key_v1", LS_DATA="ck_bar_veri_v1", LS_HIST="ck_bar_gecmis_v1",
+      LS_SOUND="ck_bar_ses_v1", LS_TEL="ck_bar_tel_v1";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const b64e=b=>btoa(String.fromCharCode.apply(null,new Uint8Array(b)));
+
+/* ---------- kilit / şifre çözme ---------- */
+let RAW="", SOURCE={kind:"sunucu",date:"—"}, encFile=null;
+async function getEnc(){ if(encFile) return encFile; encFile=await (await fetch("veri.enc?v=1",{cache:"force-cache"})).json(); return encFile; }
+async function deriveKey(pw,saltB64,iters){
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:b64d(saltB64),iterations:iters,hash:"SHA-256"},
+    base,{name:"AES-GCM",length:256},true,["decrypt"]);
+}
+async function decryptWith(key){
+  const e=await getEnc();
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64d(e.iv)},key,b64d(e.ct));
+  return {text:new TextDecoder().decode(pt), date:e.date||"—"};
+}
+async function tryStoredKey(){
+  let raw=null; try{ raw=localStorage.getItem(LS_KEY); }catch(e){}
+  if(!raw) return false;
+  try{
+    const key=await crypto.subtle.importKey("raw",b64d(raw),{name:"AES-GCM"},true,["decrypt"]);
+    const r=await decryptWith(key); RAW=r.text; SOURCE={kind:"sunucu",date:r.date}; return true;
+  }catch(e){ return false; }
+}
+$("btnUnlock").addEventListener("click", unlock);
+$("pw").addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();unlock();} });
+async function unlock(){
+  const pw=$("pw").value.trim(); if(!pw) return;
+  $("lockErr").textContent="Açılıyor…"; $("btnUnlock").disabled=true;
+  try{
+    const e=await getEnc();
+    const key=await deriveKey(pw,e.salt,e.it||300000);
+    const r=await decryptWith(key);
+    RAW=r.text; SOURCE={kind:"sunucu",date:r.date};
+    try{ localStorage.setItem(LS_KEY,b64e(await crypto.subtle.exportKey("raw",key))); }catch(x){}
+    start();
+  }catch(err){ $("lockErr").textContent="Parola yanlış."; $("btnUnlock").disabled=false; $("pw").select(); }
+}
+
+/* ---------- veri ---------- */
+let INDEX=new Map(), LIST=[];
+function buildIndex(){
+  INDEX=new Map(); LIST=[];
+  RAW.split("\n").forEach(line=>{
+    const p=line.split("|"); if(p.length<6) return;
+    const no=p[0].trim(); if(!/^\d{5,}$/.test(no)) return;
+    const rec={no,ilce:ILCE[+p[1]]||null,tur:TUR[+p[2]]||"",adet:p[3]||"",firma:(p[5]||"").replace(/\.\.\.$/,"").trim()};
+    INDEX.set(no,rec); LIST.push(rec);
+  });
+}
+function dataStamp(){
+  const n=LIST.length.toLocaleString("tr-TR");
+  $("dataPill").textContent=n+" sipariş · "+SOURCE.date;
+  $("dataDot").style.background=LIST.length?"var(--good)":"var(--bad)";
+  $("dataInfo").innerHTML="<b>"+n+"</b> sipariş yüklü. Kaynak: "+SOURCE.kind+", tarih "+SOURCE.date+
+    ". Listede olmayan bir barkod okutulursa bulunamadı der; o zaman aşağıdaki kodla paneli yeniden çek.";
+}
+function candidates(raw){
+  const d=String(raw).replace(/\D/g,""); const out=[]; const push=v=>{if(v&&out.indexOf(v)<0)out.push(v)};
+  push(d); push(d.replace(/^0+/,""));
+  for(let i=0;i+9<=d.length;i++) push(d.substr(i,9));
+  if(d.length>1){ const nc=d.slice(0,-1); push(nc); for(let i=0;i+9<=nc.length;i++) push(nc.substr(i,9)); }
+  return out;
+}
+function lookup(raw){ for(const c of candidates(raw)){ if(INDEX.has(c)) return INDEX.get(c); } return null; }
+function searchText(q){
+  const s=q.trim().toLocaleUpperCase("tr"); if(!s) return [];
+  const d=s.replace(/\D/g,"");
+  if(d.length>=3){ const hit=LIST.filter(r=>r.no.indexOf(d)>=0); if(hit.length) return hit.slice(0,8); }
+  return LIST.filter(r=>r.firma.toLocaleUpperCase("tr").indexOf(s)>=0).slice(0,8);
+}
+
+/* ---------- telefonlar ---------- */
+let TEL=Object.assign({},TEL0);
+try{ const t=JSON.parse(localStorage.getItem(LS_TEL)||"null"); if(t) TEL=Object.assign({},TEL0,t); }catch(e){}
+function paintTels(){
+  $("tels").innerHTML=ILCE.map(k=>'<label class="tel"><span>'+esc(k)+'</span><input data-il="'+esc(k)+'" inputmode="tel" value="'+esc(TEL[k]||"")+'"></label>').join("");
+}
+$("btnSaveTel").addEventListener("click",()=>{
+  document.querySelectorAll("#tels input").forEach(i=>{ TEL[i.dataset.il]=i.value.replace(/[^\d+]/g,""); });
+  try{ localStorage.setItem(LS_TEL,JSON.stringify(TEL)); }catch(e){}
+  toast("Numaralar kaydedildi"); paintHist();
+});
+$("btnResetTel").addEventListener("click",()=>{
+  TEL=Object.assign({},TEL0); try{ localStorage.removeItem(LS_TEL); }catch(e){} paintTels(); toast("Varsayılan numaralara dönüldü");
+});
+function waNumber(ilce){
+  let t=(TEL[ilce]||"").replace(/\D/g,"");
+  if(!t) return null;
+  if(t.indexOf("90")===0 && t.length===12) return t;
+  if(t.indexOf("0")===0) t=t.slice(1);
+  if(t.length===10) return "90"+t;
+  return t;
+}
+function waText(rec){
+  const satir=[rec.no+" numaralı siparişiniz depomuzda hazırdır.",""];
+  if(rec.firma) satir.push(rec.firma);
+  if(rec.tur) satir.push(rec.tur);
+  if(rec.adet) satir.push(Number(rec.adet).toLocaleString("tr-TR")+" adet");
+  return satir.join("\n");
+}
+function waOpen(num,text){
+  const url="https://wa.me/"+num+"?text="+encodeURIComponent(text);
+  const a=document.createElement("a"); a.href=url; a.target="_blank"; a.rel="noopener";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ---------- ses ---------- */
+let sound=true; try{ sound=localStorage.getItem(LS_SOUND)!=="0"; }catch(e){}
+function paintSound(){ $("btnSound").textContent="Ses: "+(sound?"açık":"kapalı"); $("btnSound").setAttribute("aria-pressed",String(sound)); }
+$("btnSound").addEventListener("click",()=>{ sound=!sound; try{localStorage.setItem(LS_SOUND,sound?"1":"0");}catch(e){} paintSound(); if(sound) speak("Ses açık"); });
+let voice=null;
+function pickVoice(){ try{ voice=(speechSynthesis.getVoices()||[]).find(v=>/^tr/i.test(v.lang))||null; }catch(e){} }
+pickVoice(); try{ speechSynthesis.onvoiceschanged=pickVoice; }catch(e){}
+function speak(t){ if(!sound) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t);
+  u.lang="tr-TR"; if(voice)u.voice=voice; u.rate=1.02; speechSynthesis.speak(u);}catch(e){} }
+let actx=null;
+function beep(ok){ if(!sound) return; try{
+  actx=actx||new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume();
+  const o=actx.createOscillator(),g=actx.createGain(); o.type="sine"; o.frequency.value=ok?880:220;
+  g.gain.value=.0001; o.connect(g); g.connect(actx.destination); const t=actx.currentTime; o.start(t);
+  g.gain.exponentialRampToValueAtTime(.16,t+.02); g.gain.exponentialRampToValueAtTime(.0001,t+(ok?.16:.3)); o.stop(t+.34);
+}catch(e){} }
+function buzz(p){ try{ navigator.vibrate&&navigator.vibrate(p); }catch(e){} }
+
+/* ---------- sonuç ---------- */
+const result=$("result"), inner=$("resultInner"), btnWa=$("btnWa");
+let current=null;
+function show(rec,rawCode){
+  current=rec&&rec.ilce?rec:null;
+  const c=rec&&rec.ilce?(COLOR[rec.ilce]||"#4f9dff"):"#ff5a52";
+  result.style.setProperty("--rc",c);
+  result.style.borderColor="color-mix(in srgb,"+c+" 42%, transparent)";
+  btnWa.classList.remove("on");
+  if(rec&&rec.ilce){
+    const tekrar=hist.filter(h=>h.no===rec.no).length;
+    inner.innerHTML='<div class="r-label">İlçe</div><div class="r-ilce">'+esc(rec.ilce)+'</div>'+
+      '<div class="r-firma">'+esc(rec.firma)+'</div><div class="r-meta">'+
+      '<span class="chip">Sipariş <b>'+esc(rec.no)+'</b></span>'+
+      (rec.tur?'<span class="chip">'+esc(rec.tur)+'</span>':'')+
+      (rec.adet?'<span class="chip"><b>'+Number(rec.adet).toLocaleString("tr-TR")+'</b> adet</span>':'')+
+      (tekrar?'<span class="chip warn">'+(tekrar+1)+'. kez okundu</span>':'')+'</div>';
+    const num=waNumber(rec.ilce);
+    btnWa.innerHTML=num?('WhatsApp’tan gönder <small>'+esc(rec.ilce)+'</small>'):'Bu ilçe için numara yok';
+    btnWa.disabled=!num; btnWa.classList.add("on");
+    speak(rec.ilce); beep(true); buzz(40); addHist(rec);
+  }else if(rec){
+    inner.innerHTML='<div class="r-label">İlçe atanmamış</div><div class="r-ilce" style="font-size:clamp(28px,8vw,42px)">İlçe yok</div>'+
+      '<div class="r-firma">'+esc(rec.firma)+'</div><div class="r-meta"><span class="chip">Sipariş <b>'+esc(rec.no)+'</b></span></div>'+
+      '<div class="r-idle" style="margin-top:9px">Bu siparişe panelde ilçe seçilmemiş.</div>';
+    speak("İlçe yok"); beep(false); buzz([30,60,30]);
+  }else{
+    inner.innerHTML='<div class="r-label">Bulunamadı</div><div class="r-ilce" style="font-size:clamp(28px,8vw,42px)">Kayıt yok</div>'+
+      '<div class="r-idle">Okunan kod: <b>'+esc(rawCode||"—")+'</b><br>Bu numara listede yok. Sipariş yeni olabilir: Veri sekmesinden paneli yeniden çek.</div>';
+    speak("Kayıt bulunamadı"); beep(false); buzz([30,60,30]);
+  }
+  result.classList.remove("pop"); void result.offsetWidth; result.classList.add("pop");
+}
+btnWa.addEventListener("click",()=>{
+  if(!current) return;
+  const num=waNumber(current.ilce); if(!num){ toast("Bu ilçe için numara girilmemiş"); return; }
+  waOpen(num,waText(current));
+});
+
+/* ---------- geçmiş ---------- */
+let hist=[]; try{ hist=JSON.parse(localStorage.getItem(LS_HIST)||"[]")||[]; }catch(e){ hist=[]; }
+function addHist(rec){
+  hist.unshift({no:rec.no,ilce:rec.ilce,firma:rec.firma,tur:rec.tur,adet:rec.adet,t:Date.now()});
+  if(hist.length>500) hist.length=500;
+  try{ localStorage.setItem(LS_HIST,JSON.stringify(hist)); }catch(e){}
+  paintHist();
+}
+function paintHist(){
+  const bars=$("bars"), list=$("hist");
+  if(!hist.length){ bars.innerHTML='<div class="empty">Henüz okuma yok.</div>'; list.innerHTML='<div class="empty">Henüz okuma yok.</div>'; return; }
+  const counts={}; hist.forEach(h=>{counts[h.ilce]=(counts[h.ilce]||0)+1;});
+  const max=Math.max.apply(null,Object.keys(counts).map(k=>counts[k]));
+  bars.innerHTML=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]).map(k=>{
+    const c=COLOR[k]||"#8b96a8", w=Math.round(counts[k]/max*100);
+    return '<div class="bar"><div class="t">'+esc(k)+'</div><div class="track"><div class="fill" style="width:'+w+'%;background:'+c+'"></div></div>'+
+      '<div class="n">'+counts[k]+'</div><button class="mini" data-wa="'+esc(k)+'">WhatsApp</button></div>';
+  }).join("")+'<div class="bar" style="margin-top:4px"><div class="t" style="color:var(--ink)">Toplam</div><div></div><div class="n">'+hist.length+'</div><div></div></div>';
+  list.innerHTML=hist.slice(0,60).map(h=>{
+    const c=COLOR[h.ilce]||"#8b96a8", tm=new Date(h.t).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"});
+    return '<div class="hrow"><span class="tag" style="background:color-mix(in srgb,'+c+' 22%, transparent);color:'+c+'">'+esc(h.ilce)+'</span>'+
+      '<span class="no">'+esc(h.no)+'</span><span class="fr">'+tm+' · '+esc(h.firma)+'</span></div>';
+  }).join("");
+}
+$("bars").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-wa]"); if(!b) return;
+  const il=b.dataset.wa, num=waNumber(il);
+  if(!num){ toast("Bu ilçe için numara girilmemiş"); return; }
+  const seen={}, rows=[];
+  hist.filter(h=>h.ilce===il).forEach(h=>{ if(seen[h.no]) return; seen[h.no]=1;
+    rows.push("• "+h.no+" — "+h.firma+(h.tur?" — "+h.tur:"")+(h.adet?" — "+Number(h.adet).toLocaleString("tr-TR")+" adet":"")); });
+  waOpen(num,"Aşağıdaki siparişleriniz depomuzda hazırdır.\n\n"+rows.join("\n"));
+});
+$("btnClearHist").addEventListener("click",()=>{ hist=[]; try{localStorage.removeItem(LS_HIST);}catch(e){} paintHist(); toast("Geçmiş silindi"); });
+$("btnCopyHist").addEventListener("click",()=>{
+  copy(hist.map(h=>[new Date(h.t).toLocaleString("tr-TR"),h.no,h.ilce,h.firma].join("\t")).join("\n")||"—","Liste kopyalandı");
+});
+
+/* ---------- barkod çözme ---------- */
+let nativeDet=null, zxing=null;
+(async function(){
+  try{
+    if("BarcodeDetector" in window){
+      const sup=await window.BarcodeDetector.getSupportedFormats();
+      const want=["code_128","code_39","code_93","ean_13","ean_8","upc_a","upc_e","itf","codabar","qr_code","data_matrix","pdf417"].filter(f=>sup.indexOf(f)>=0);
+      if(want.length) nativeDet=new window.BarcodeDetector({formats:want});
+    }
+  }catch(e){}
+  try{
+    if(window.ZXing&&window.ZXing.BrowserMultiFormatReader){
+      const h=new Map(); h.set(window.ZXing.DecodeHintType.TRY_HARDER,true);
+      zxing=new window.ZXing.BrowserMultiFormatReader(h);
+    }
+  }catch(e){}
+})();
+const work=document.createElement("canvas"), wctx=work.getContext("2d",{willReadFrequently:true});
+async function decodeCanvas(c){
+  if(nativeDet){ try{ const r=await nativeDet.detect(c); if(r&&r.length) return r[0].rawValue; }catch(e){} }
+  if(zxing){ try{ const r=zxing.decodeFromCanvas(c); if(r) return r.getText(); }catch(e){} }
+  return null;
+}
+function drawTo(src,sx,sy,sw,sh,maxW,rot){
+  const sc=Math.min(1,maxW/sw), w=Math.round(sw*sc), h=Math.round(sh*sc);
+  if(rot){ work.width=h; work.height=w; wctx.setTransform(1,0,0,1,0,0); wctx.clearRect(0,0,h,w);
+    wctx.translate(h/2,w/2); wctx.rotate(Math.PI/2); wctx.drawImage(src,sx,sy,sw,sh,-w/2,-h/2,w,h); wctx.setTransform(1,0,0,1,0,0); }
+  else { work.width=w; work.height=h; wctx.setTransform(1,0,0,1,0,0); wctx.drawImage(src,sx,sy,sw,sh,0,0,w,h); }
+  return work;
+}
+let phase=0;
+async function decodeVideo(){
+  const vw=video.videoWidth, vh=video.videoHeight; if(!vw) return null;
+  if(nativeDet){ try{ const r=await nativeDet.detect(video); if(r&&r.length) return r[0].rawValue; }catch(e){} }
+  const bands=[[0,Math.round(vh*0.26),vw,Math.round(vh*0.48),1100,false],
+               [0,0,vw,vh,1000,false],
+               [Math.round(vw*0.2),0,Math.round(vw*0.6),vh,1000,true]];
+  const b=bands[phase%bands.length]; phase++;
+  return decodeCanvas(drawTo(video,b[0],b[1],b[2],b[3],b[4],b[5]));
+}
+async function decodeStill(src,sw,sh){
+  const tries=[[0,0,sw,sh,1500,false],[0,Math.round(sh*0.25),sw,Math.round(sh*0.5),1500,false],
+               [0,0,sw,sh,1500,true],[0,0,sw,sh,2200,false]];
+  for(const t of tries){ const r=await decodeCanvas(drawTo(src,t[0],t[1],t[2],t[3],t[4],t[5])); if(r) return r; }
+  return null;
+}
+
+/* ---------- fotoğraf ---------- */
+const file=$("file");
+$("btnPhoto").addEventListener("click",()=>{ beep(true); file.click(); });
+file.addEventListener("change",async()=>{
+  const f=file.files&&file.files[0]; if(!f) return;
+  toast("Okunuyor…");
+  try{
+    const img=window.createImageBitmap?await createImageBitmap(f):await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(f);});
+    const txt=await decodeStill(img,img.width,img.height); file.value="";
+    if(!txt){ show(null,"okunamadı"); toast("Barkod okunamadı — daha yakın ve net dene"); return; }
+    handleCode(txt);
+  }catch(e){ file.value=""; toast("Görsel okunamadı"); }
+});
+
+/* ---------- canlı tarama ---------- */
+let stream=null, track=null, scanning=false, lastCode="", lastAt=0, wake=null;
+const camBox=$("cam"), video=$("video"), btnLive=$("btnLive");
+btnLive.addEventListener("click",async()=>{
+  if(scanning){ stopLive(); return; }
+  beep(true);
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false}); }
+  catch(e){ toast("Kameraya izin verilmedi — tarayıcı ayarından izni aç"); return; }
+  video.srcObject=stream; camBox.classList.add("on");
+  try{ await video.play(); }catch(e){}
+  track=stream.getVideoTracks()[0];
+  try{
+    const caps=track.getCapabilities?track.getCapabilities():{};
+    if(caps.torch){ $("btnTorch").hidden=false; }
+    if(caps.zoom){ const z=$("zoom"); z.hidden=false; z.min=caps.zoom.min; z.max=Math.min(caps.zoom.max,caps.zoom.min+6); z.step=caps.zoom.step||.1; z.value=track.getSettings().zoom||caps.zoom.min; }
+  }catch(e){}
+  try{ wake=await navigator.wakeLock.request("screen"); }catch(e){}
+  scanning=true; btnLive.textContent="Taramayı durdur"; tick();
+  camBox.scrollIntoView({behavior:"smooth",block:"center"});
+});
+$("btnTorch").addEventListener("click",async()=>{
+  if(!track) return; const on=$("btnTorch").getAttribute("aria-pressed")==="true";
+  try{ await track.applyConstraints({advanced:[{torch:!on}]}); $("btnTorch").setAttribute("aria-pressed",String(!on)); }catch(e){ toast("Bu cihazda ışık açılamıyor"); }
+});
+$("zoom").addEventListener("input",async e=>{ if(!track) return; try{ await track.applyConstraints({advanced:[{zoom:+e.target.value}]}); }catch(x){} });
+function stopLive(){
+  scanning=false; btnLive.textContent="Taramayı başlat"; camBox.classList.remove("on");
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; track=null; }
+  $("btnTorch").hidden=true; $("btnTorch").setAttribute("aria-pressed","false"); $("zoom").hidden=true;
+  if(wake){ try{ wake.release(); }catch(e){} wake=null; }
+}
+let busy=false, lastRun=0;
+async function tick(){
+  if(!scanning) return;
+  const now=performance.now();
+  if(!busy && now-lastRun>(nativeDet?110:200)){
+    busy=true; lastRun=now;
+    try{ const txt=await decodeVideo(); if(txt) handleCode(txt); }catch(e){}
+    busy=false;
+  }
+  if(video.requestVideoFrameCallback) video.requestVideoFrameCallback(()=>tick());
+  else setTimeout(tick,80);
+}
+function handleCode(txt){
+  const now=Date.now();
+  if(txt===lastCode&&now-lastAt<2500) return;
+  lastCode=txt; lastAt=now;
+  show(lookup(txt),txt); go("scan");
+}
+document.addEventListener("visibilitychange",()=>{ if(document.hidden&&scanning) stopLive(); });
+
+/* ---------- manuel ---------- */
+const manual=$("manual"), findHint=$("findHint");
+function doFind(){
+  const q=manual.value.trim(); if(!q) return;
+  const d=q.replace(/\D/g,"");
+  if(d.length>=5){ const hit=lookup(d); if(hit){ show(hit,d); findHint.textContent="Son 4 hane de yeter."; return; } }
+  const res=searchText(q);
+  if(res.length===1){ show(res[0],q); findHint.textContent="Son 4 hane de yeter."; return; }
+  if(res.length>1){ findHint.innerHTML=res.map(r=>'<a href="#" data-no="'+r.no+'" style="color:var(--accent);text-decoration:none">'+esc(r.no)+' · '+esc(r.ilce||"ilçe yok")+' · '+esc(r.firma)+'</a>').join("<br>"); return; }
+  findHint.textContent="Eşleşen kayıt yok."; show(null,q);
+}
+$("btnFind").addEventListener("click",doFind);
+manual.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();doFind();} });
+findHint.addEventListener("click",e=>{
+  const a=e.target.closest("a[data-no]"); if(!a) return; e.preventDefault();
+  const r=INDEX.get(a.dataset.no); if(r){ show(r,r.no); findHint.textContent="Son 4 hane de yeter."; }
+});
+
+/* ---------- veri aktarma ---------- */
+$("btnImport").addEventListener("click",()=>{
+  const lines=$("paste").value.trim().split("\n").filter(l=>/^\d{5,}\|/.test(l.trim()));
+  if(lines.length<5){ toast("Liste tanınmadı — panelden gelen satırları yapıştır"); return; }
+  RAW=lines.join("\n");
+  const date=new Date().toLocaleDateString("tr-TR",{day:"2-digit",month:"short",year:"numeric"});
+  try{ localStorage.setItem(LS_DATA,JSON.stringify({raw:RAW,date})); }catch(e){ toast("Cihaza kaydedilemedi ama bu oturumda geçerli"); }
+  SOURCE={kind:"elle yüklenen",date}; buildIndex(); dataStamp();
+  toast(lines.length.toLocaleString("tr-TR")+" sipariş yüklendi");
+});
+$("btnReset").addEventListener("click",async()=>{
+  try{ localStorage.removeItem(LS_DATA); }catch(e){}
+  if(await tryStoredKey()){ buildIndex(); dataStamp(); toast("Sunucudaki veriye dönüldü"); }
+});
+const SNIP='(async()=>{const IL=["ÜMRANİYE","ÜSKÜDAR","TUZLA","ŞİLE","MALTEPE","SANCAKTEPE","PENDİK","DUDULLU","SULTANBEYLİ","BEYKOZ"],TU=["Klasik Karton","Özel Karton","Küçük Boy Ciltli Takvim","Büyük Boy Ciltli Takvim","Mobil Afiş","Mobil Kart","Mobil Link"],R={},s=m=>new Promise(r=>setTimeout(r,m)),f=()=>document.querySelector("table tbody tr td:nth-child(2)")?.innerText.trim(),nb=()=>[...document.querySelectorAll("button,a")].find(b=>b.getAttribute("rel")==="next"||/sonraki/i.test(b.innerText||"")),gr=()=>{[...document.querySelectorAll("table tbody tr")].forEach(tr=>{const t=[...tr.children],no=(t[1]?.innerText||"").trim();if(!/^\\d{6,}$/.test(no))return;const se=tr.querySelector("select.mtk-select"),lt=(t[t.length-1]?.innerText||"").replace(/\\s+/g," "),ad=(lt.match(/([\\d.]+)\\s*adet/)||[])[1]||"";R[no]=[no,se?IL.indexOf(se.value):-1,TU.indexOf((t[0]?.innerText||"").trim()),ad.replace(/\\./g,""),se&&se.className.includes("mtk-auto")?1:0,(t[3]?.innerText||"").replace(/[|\\n]/g," ").replace(/\\s+/g," ")].join("|")})};gr();for(let i=0;i<80;i++){const b=f(),n=nb();if(!n||n.disabled)break;n.click();let ok=0;for(let k=0;k<40;k++){await s(250);if(f()&&f()!==b){ok=1;break}}if(!ok)break;for(let k=0;k<20;k++){await s(150);if(document.querySelectorAll("table tbody tr select.mtk-select").length>=document.querySelectorAll("table tbody tr").length-2)break}gr()}const o=Object.values(R).sort();document.body.innerHTML=\'<textarea id="ck_out" style="position:fixed;inset:0;width:100%;height:100%;font:12px monospace;z-index:999999"></textarea>\';const ta=document.getElementById("ck_out");ta.value=o.join("\\n");ta.focus();ta.select();try{await navigator.clipboard.writeText(ta.value);alert(o.length+" sipariş kopyalandı.")}catch(e){alert(o.length+" sipariş hazır. Metin seçili: Ctrl+C.")}})();';
+$("snip").textContent=SNIP;
+$("btnCopySnip").addEventListener("click",()=>copy(SNIP,"Kod kopyalandı"));
+function copy(t,m){ try{ navigator.clipboard.writeText(t).then(()=>toast(m),()=>toast("Kopyalanamadı — elle seç")); }catch(e){ toast("Kopyalanamadı"); } }
+let tt=null;
+function toast(m){ const el=$("toast"); el.textContent=m; el.classList.add("on"); clearTimeout(tt); tt=setTimeout(()=>el.classList.remove("on"),2100); }
+
+/* ---------- gezinme / açılış ---------- */
+function go(v){
+  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="v-"+v));
+  document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-current",String(b.dataset.v===v)));
+}
+document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.v)));
+function start(){
+  try{ const s=localStorage.getItem(LS_DATA); if(s){ const o=JSON.parse(s); if(o&&o.raw&&o.raw.length>200){ RAW=o.raw; SOURCE={kind:"elle yüklenen",date:o.date||"?"}; } } }catch(e){}
+  buildIndex(); dataStamp(); paintTels(); paintSound(); paintHist();
+  $("lock").style.display="none"; $("app").hidden=false; $("nav").hidden=false;
+}
+(async function boot(){
+  if(await tryStoredKey()) start(); else $("pw").focus();
+  if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js"); }catch(e){} }
+})();
+})();
+</script>
+</body>
+</html>
