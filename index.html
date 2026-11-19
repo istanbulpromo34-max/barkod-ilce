@@ -488,16 +488,30 @@ let nativeDet=null, zxing=null;
     }
   }catch(e){}
   try{
-    if(window.ZXing&&window.ZXing.BrowserMultiFormatReader){
-      const h=new Map(); h.set(window.ZXing.DecodeHintType.TRY_HARDER,true);
-      zxing=new window.ZXing.BrowserMultiFormatReader(h);
+    const ZX=window.ZXing;
+    if(ZX&&ZX.MultiFormatReader&&ZX.HTMLCanvasElementLuminanceSource){
+      const BF=ZX.BarcodeFormat, h=new Map();
+      h.set(ZX.DecodeHintType.TRY_HARDER,true);
+      h.set(ZX.DecodeHintType.POSSIBLE_FORMATS,[BF.CODE_128,BF.CODE_39,BF.CODE_93,BF.EAN_13,BF.EAN_8,BF.UPC_A,BF.UPC_E,BF.ITF,BF.CODABAR,BF.QR_CODE,BF.DATA_MATRIX]);
+      zxing=new ZX.MultiFormatReader(); zxing.setHints(h);
     }
   }catch(e){}
 })();
 const work=document.createElement("canvas"), wctx=work.getContext("2d",{willReadFrequently:true});
 async function decodeCanvas(c){
   if(nativeDet){ try{ const r=await nativeDet.detect(c); if(r&&r.length) return r[0].rawValue; }catch(e){} }
-  if(zxing){ try{ const r=zxing.decodeFromCanvas(c); if(r) return r.getText(); }catch(e){} }
+  if(zxing){
+    try{
+      const ZX=window.ZXing, src=new ZX.HTMLCanvasElementLuminanceSource(c);
+      let r=null;
+      try{ r=zxing.decode(new ZX.BinaryBitmap(new ZX.HybridBinarizer(src))); }
+      catch(e1){
+        try{ r=zxing.decode(new ZX.BinaryBitmap(new ZX.HybridBinarizer(new ZX.InvertedLuminanceSource(src)))); }catch(e2){}
+      }
+      try{ zxing.reset(); }catch(e3){}
+      if(r) return r.getText();
+    }catch(e){}
+  }
   return null;
 }
 function drawTo(src,sx,sy,sw,sh,maxW,rot){
